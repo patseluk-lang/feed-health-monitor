@@ -14,6 +14,20 @@ reports success while the data is already wrong. A collector that runs
 without error and quietly stores nothing is worse than one that crashes,
 because nobody looks.
 
+## Relation to rss-feed-collector
+
+This is the second pass at the problem. The first —
+[rss-feed-collector](https://github.com/patseluk-lang/rss-feed-collector)
+— was built to a client brief: read a list of feeds, write every article
+into one text file, no database, no dependencies. It does that job well
+and remains the right tool for it.
+
+What it cannot do is answer questions across time. A text file per run
+has no memory: it cannot tell you that a source has been quiet for
+three times its usual interval, or that one feed has failed eleven runs
+in a row. That requires storage, a stable identity for every entry, and
+queries over history — which is what this project adds.
+
 ## Why this is not a feed reader
 
 A feed reader answers *what was published*. This answers *whether the
