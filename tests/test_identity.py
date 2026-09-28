@@ -1,6 +1,6 @@
 """Tests for the deduplication key derived by the parser.
 
-Идempotency depends on one property: the same entry must produce the
+Idempotency depends on one property: the same entry must produce the
 same key on every run. These tests pin that property down, along with
 the priority order of the three identity levels.
 """
