@@ -78,9 +78,14 @@ norm for this repository, not a defect.
 
 ## What the analytics answer
 
-Six hand-written SQL queries. Two examples of real output below.
+Six hand-written SQL queries. Each one is printed as JSON by
+`python manage.py report <name>`, where `<name>` is one of `interval`,
+`volume`, `reliability`, `duplicates`, `silence`, `rhythm`.
+Two examples of real output below.
 
 ### Collection reliability
+
+`python manage.py report reliability`
 
 Which sources fail, how often, and with what error class:
 
@@ -108,6 +113,8 @@ Which sources fail, how often, and with what error class:
 ```
 
 ### Silence detection
+
+`python manage.py report silence`
 
 The harder question. A source that stopped publishing looks identical
 to a source that is simply slow — unless you know its own rhythm.
