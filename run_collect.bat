@@ -5,7 +5,7 @@ set PROJECT_DIR=D:\PycharmProjects\feed-health-monitor
 
 cd /d "%PROJECT_DIR%"
 
-REM ── Locate the venv interpreter ──────────────────────
+REM Locate the venv interpreter
 set VENV_PYTHON=
 if exist "%PROJECT_DIR%\.venv\Scripts\python.exe" set VENV_PYTHON=%PROJECT_DIR%\.venv\Scripts\python.exe
 if exist "%PROJECT_DIR%\venv\Scripts\python.exe"  set VENV_PYTHON=%PROJECT_DIR%\venv\Scripts\python.exe
@@ -15,15 +15,13 @@ if "%VENV_PYTHON%"=="" (
     pause
     exit /b 1
 )
-REM ───────────────────────────────────────────────────
 
 if not exist "logs" mkdir "logs"
 
-REM ── Date via PowerShell ──────────────────────────
+REM Date via PowerShell
 set STAMP=
 for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd"`) do set STAMP=%%I
 if "%STAMP%"=="" set STAMP=nodate
-REM ───────────────────────────────────────────────────
 
 set LOGFILE=logs\collect_%STAMP%.log
 
