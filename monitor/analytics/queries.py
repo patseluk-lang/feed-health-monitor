@@ -422,3 +422,68 @@ def publication_rhythm():
     with connection.cursor() as cursor:
         cursor.execute(PUBLICATION_RHYTHM_SQL)
         return _fetch_all_as_dicts(cursor)
+
+IDENTITY_STABILITY_SQL = """
+WITH url_identity AS (
+    SELECT
+        source_id,
+        url,
+        COUNT(DISTINCT identity) AS identity_count
+    FROM monitor_article
+    WHERE url IS NOT NULL AND url <> ''
+    GROUP BY source_id, url
+)
+SELECT
+    s.id AS source_id,
+    s.title AS title,
+    COUNT(ui.url) AS urls_tracked,
+    COALESCE(SUM(CASE WHEN ui.identity_count > 1 THEN 1 ELSE 0 END), 0)
+        AS urls_with_multiple_identities,
+    COALESCE(MAX(ui.identity_count), 0) AS max_identities_per_url
+FROM monitor_source s
+LEFT JOIN url_identity ui ON ui.source_id = s.id
+GROUP BY s.id, s.title
+ORDER BY urls_with_multiple_identities DESC, s.title
+"""
+
+
+def identity_stability():
+    """Detect sources that issue unstable item identifiers.
+
+    An article is expected to keep one identity across fetch runs. When a
+    feed derives its guid from the item's position in the document rather
+    than from the item itself, the identity changes on every fetch and the
+    unique constraint on (source, identity) stops protecting anything: each
+    run inserts the same article again under a new key.
+
+    The failure is silent by construction. No fetch error is raised, no
+    constraint is violated, and items_new keeps reporting growth, so the
+    only visible trace is the same url appearing under several identities.
+    That is exactly what this query counts.
+
+    A count above one does not always mean a broken feed: a source may
+    legitimately republish a url as a new entry. The number is a signal to
+    inspect the source, not a verdict on it.
+
+    unstable_ratio is None when the source has no articles with a url yet,
+    since a ratio over an empty set carries no meaning. Callers must treat
+    that as unknown rather than as zero.
+
+    Returns:
+        list[dict]: source_id, title, urls_tracked,
+        urls_with_multiple_identities, max_identities_per_url,
+        unstable_ratio.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(IDENTITY_STABILITY_SQL)
+        rows = _fetch_all_as_dicts(cursor)
+
+    for row in rows:
+        tracked = row["urls_tracked"]
+        row["unstable_ratio"] = (
+            None
+            if tracked == 0
+            else row["urls_with_multiple_identities"] * 100.0 / tracked
+        )
+
+    return rows

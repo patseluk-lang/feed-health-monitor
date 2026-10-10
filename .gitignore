@@ -21,3 +21,7 @@ logs/
 
 # Environment
 .env
+
+# Scratch runner for analytics queries during development.
+# Not part of the project - the shipped entry point is a management command.
+ddl.py

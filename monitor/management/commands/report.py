@@ -18,6 +18,7 @@ REPORTS = {
     "duplicates": queries.duplicate_titles,
     "silence": queries.silent_sources,
     "rhythm": queries.publication_rhythm,
+    "identity": queries.identity_stability,
 }
 
 

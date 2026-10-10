@@ -11,12 +11,37 @@ from django.db import models
 
 
 class Source(models.Model):
-    """A feed being watched."""
+    """A feed being watched.
+
+    `identity_strategy` records how articles from this source are to be
+    deduplicated. The default assumes the feed's guid is stable across
+    fetches, which is what the RSS specification intends. Some feeds
+    violate it: BBC News derives the guid from the item's position in the
+    document, so the same article arrives under a new guid on every fetch
+    and the unique constraint stops protecting anything.
+
+    The setting is per source rather than global on purpose. Instability is
+    a property of a particular publisher, not of feeds in general, and a
+    global rule that demotes guid would give up the protection guid exists
+    to provide - resilience to a url that changes.
+
+    Switching a source is a deliberate act, prompted by the identity
+    stability report, and the reason belongs in `note`.
+    """
+
+    class IdentityStrategy(models.TextChoices):
+        GUID = "guid", "Feed guid, falling back to url"
+        URL = "url", "Url only"
 
     title = models.CharField(max_length=200)
     feed_url = models.URLField(max_length=500, unique=True)
     site_url = models.URLField(max_length=500, blank=True)
     is_active = models.BooleanField(default=True)
+    identity_strategy = models.CharField(
+        max_length=10,
+        choices=IdentityStrategy.choices,
+        default=IdentityStrategy.GUID,
+    )
     added_at = models.DateTimeField(auto_now_add=True)
     note = models.TextField(blank=True)
 
@@ -67,10 +92,16 @@ class FetchRun(models.Model):
 class Article(models.Model):
     """One item retrieved from a feed.
 
-    `identity` is the deduplication key, derived from the feed entry by a
-    fixed rule: the feed's guid when present, otherwise the url, otherwise
-    a hash of title and publication date. The rule must be deterministic -
-    the same entry has to produce the same identity on every run.
+    `identity` is the deduplication key, derived from the feed entry by the
+    rule the source declares in `identity_strategy`: normally the feed's
+    guid when present, otherwise the url, otherwise a hash of title and
+    publication date; for a source marked `url`, the guid is skipped
+    entirely.
+
+    Whichever rule applies, it must be deterministic - the same entry has
+    to produce the same identity on every run. A rule that does not is not
+    a slow rule or an inaccurate one; it is a rule that silently fills the
+    table with duplicates while every run reports success.
     """
 
     source = models.ForeignKey(

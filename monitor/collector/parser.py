@@ -13,6 +13,11 @@ from xml.etree import ElementTree
 
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 
+IDENTITY_FROM_GUID = "guid"
+IDENTITY_FROM_URL = "url"
+
+IDENTITY_STRATEGIES = (IDENTITY_FROM_GUID, IDENTITY_FROM_URL)
+
 
 class ParseError(Exception):
     """The document could not be understood as a feed."""
@@ -40,27 +45,37 @@ class ParsedFeed:
     skipped: int
 
 
-def parse(body):
+def parse(body, identity_strategy=IDENTITY_FROM_GUID):
     """Parse a feed document into entries.
 
     Raises ParseError if the document is not usable at all. Individual
     malformed entries do not raise - they are skipped and counted, so the
     caller can report partial loss instead of discovering it later.
+
+    identity_strategy selects how the deduplication key is derived, and is
+    a plain string rather than a model enum so that this module stays
+    testable without a database. The values match Source.IdentityStrategy
+    by agreement; an unknown value raises rather than falling back to the
+    default, because quietly parsing under the wrong rule produces exactly
+    the silent corruption the strategy exists to prevent.
     """
+    if identity_strategy not in IDENTITY_STRATEGIES:
+        raise ParseError(f"Unknown identity strategy: {identity_strategy!r}")
+
     try:
         root = ElementTree.fromstring(body)
     except ElementTree.ParseError as exc:
         raise ParseError(f"Document is not well-formed XML: {exc}") from exc
 
     if root.tag == f"{ATOM_NS}feed":
-        return _parse_atom(root)
+        return _parse_atom(root, identity_strategy)
     if root.tag == "rss" or root.find("channel") is not None:
-        return _parse_rss(root)
+        return _parse_rss(root, identity_strategy)
 
     raise ParseError(f"Unrecognised root element: {root.tag}")
 
 
-def _parse_rss(root):
+def _parse_rss(root, identity_strategy):
     channel = root.find("channel")
     if channel is None:
         raise ParseError("RSS document has no <channel>")
@@ -84,6 +99,7 @@ def _parse_rss(root):
                     url=url,
                     title=_text(item, "title"),
                     raw_date=_text(item, "pubDate"),
+                    strategy=identity_strategy,
                 ),
                 url=url,
                 title=_text(item, "title"),
@@ -99,7 +115,7 @@ def _parse_rss(root):
     )
 
 
-def _parse_atom(root):
+def _parse_atom(root, identity_strategy):
     entries = []
     skipped = 0
 
@@ -120,6 +136,7 @@ def _parse_atom(root):
                     url=url,
                     title=_text(entry, f"{ATOM_NS}title"),
                     raw_date=raw_date,
+                    strategy=identity_strategy,
                 ),
                 url=url,
                 title=_text(entry, f"{ATOM_NS}title"),
@@ -136,13 +153,20 @@ def _parse_atom(root):
     )
 
 
-def _identity(guid, url, title, raw_date):
+def _identity(guid, url, title, raw_date, strategy=IDENTITY_FROM_GUID):
     """Derive the deduplication key for an entry.
 
-    Three levels, falling downward:
+    Under the default strategy, three levels falling downward:
         1. the feed's own guid or Atom id, when present
         2. the entry url
         3. a hash of title and raw publication date
+
+    Under IDENTITY_FROM_URL the first level is skipped. That is not an
+    improvement on the rule - it is a concession to a publisher who does
+    not honour it. A guid outranks a url precisely because a url can be
+    rewritten while the entry stays the same, so demoting it costs real
+    protection and is only worth doing where the guid has been observed to
+    be unstable.
 
     The rule is deterministic and stateless: the same entry produces the
     same key on every run, on any machine, with no memory of previous runs.
@@ -153,7 +177,7 @@ def _identity(guid, url, title, raw_date):
     a parse failure must not change the key. An entry whose date we cannot
     read is still the same entry.
     """
-    if guid and guid.strip():
+    if strategy == IDENTITY_FROM_GUID and guid and guid.strip():
         return guid.strip()[:200]
     if url:
         return url[:200]

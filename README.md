@@ -78,9 +78,9 @@ norm for this repository, not a defect.
 
 ## What the analytics answer
 
-Six hand-written SQL queries. Each one is printed as JSON by
+Seven hand-written SQL queries. Each one is printed as JSON by
 `python manage.py report <name>`, where `<name>` is one of `interval`,
-`volume`, `reliability`, `duplicates`, `silence`, `rhythm`.
+`volume`, `reliability`, `duplicates`, `silence`, `rhythm`, `identity`.
 Two examples of real output below.
 
 ### Collection reliability
@@ -170,6 +170,13 @@ Level 3 hashes the *raw* date string rather than the parsed value. A
 date we failed to parse must not change the key: an entry whose
 timestamp is unreadable is still the same entry.
 
+Level 1 assumes the publisher keeps the guid stable. BBC News does not:
+its guid carries the item's position in the feed, so the same article
+arrived under a new key on every run. Such a source is switched to
+`identity_strategy = "url"`, which skips level 1. The setting is per
+source, not global. The incident and the query that exposed it are
+described in [docs/identity-instability-bbc.md](docs/identity-instability-bbc.md).
+
 ### Malformed entries are dropped, never silently
 
 An entry with no link cannot be opened, deduplicated by url, or shown to
@@ -195,7 +202,7 @@ silent offset to every interval the analytics layer later computes.
 
 ### Analytics bypass the ORM
 
-The six queries are written in SQL and executed through
+The seven queries are written in SQL and executed through
 `connection.cursor()`. Median intervals, weekday-hour distributions, and
 volume comparisons across time windows are set operations; expressing
 them through an ORM would obscure what the database is actually doing

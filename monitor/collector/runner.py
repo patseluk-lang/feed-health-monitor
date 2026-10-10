@@ -71,7 +71,7 @@ def collect_one(source):
         result = fetch(source.feed_url)
         run.http_status = result.http_status
 
-        feed = parse(result.body)
+        feed = parse(result.body, identity_strategy=source.identity_strategy)
         items_new = _store(source, feed.entries)
 
     except FetchError as exc:
